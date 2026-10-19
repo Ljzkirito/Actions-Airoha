@@ -11,23 +11,41 @@
 name: Build
 
 on:
-  repository_dispatch:
   workflow_dispatch:
     inputs:
       Cache:
-        description: 'Using cache to speed up OpenWrt compilation.'
+        description: '使用上次编译缓存或保存本次编译缓存'
         required: true
         default: 'false'
         type: choice
         options:
           - 'true'
           - 'false'
+      Config:
+        description: '选择配置文件'
+        required: true
+        default: 'an7583-mini.config'
+        type: choice
+        options:
+          - 'an7583.config'
+          - 'an7583-mini.config'
+          - 'ponwrt/configs/an7581.config'
+          - 'ponwrt/configs/an7583.config'
+      IPTV:
+        description: '是否编译 luci-app-iptv'
+        required: true
+        default: 'keep'
+        type: choice
+        options:
+          - 'keep'
+          - 'enable'
+          - 'disable'
 
 env:
   REPO_URL: https://github.com/pbs05/ponwrt
   REPO_BRANCH: master
   FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: an7583.config
+  CONFIG_FILE: ${{ github.event.inputs.Config }}
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
   UPLOAD_BIN_DIR: false
@@ -101,8 +119,20 @@ jobs:
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone -b $REPO_BRANCH --depth=1 $REPO_URL ImmortalWrt
-        ln -sf /workdir/ImmortalWrt $GITHUB_WORKSPACE/ImmortalWrt
+        git clone -b $REPO_BRANCH --depth=1 $REPO_URL Airoha
+        ln -sf /workdir/Airoha $GITHUB_WORKSPACE/Airoha
+
+    - name: Resolve config file
+      run: |
+        if [ "${{ github.event.inputs.Config }}" = "ponwrt/configs/an7581.config" ]; then
+          echo "Using an7581 config from cloned repo ..."
+          cp Airoha/configs/an7581.config orig-an7581.config
+          echo "CONFIG_FILE=orig-an7581.config" >> $GITHUB_ENV
+        elif [ "${{ github.event.inputs.Config }}" = "ponwrt/configs/an7583.config" ]; then
+          echo "Using an7583 config from cloned repo ..."
+          cp Airoha/configs/an7583.config orig-an7583.config
+          echo "CONFIG_FILE=orig-an7583.config" >> $GITHUB_ENV
+        fi
 
     - name: Cache Toolchain
       uses: HiGarfield/cachewrtbuild@main
@@ -111,33 +141,57 @@ jobs:
         ccache: 'false'
         clean: 'false'
         mixkey: 'airoha'
-        prefix: ${{ github.workspace }}/ImmortalWrt
+        prefix: ${{ github.workspace }}/Airoha
 
     - name: Load custom feeds (DIY_P1_SH)
       run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF ImmortalWrt/feeds.conf.default
+        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF Airoha/feeds.conf.default
         chmod +x $DIY_P1_SH
-        cd ImmortalWrt
+        cd Airoha
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: Update feeds
-      run: cd ImmortalWrt && ./scripts/feeds update -a
+      run: cd Airoha && ./scripts/feeds update -a
 
     - name: Install feeds
-      run: cd ImmortalWrt && ./scripts/feeds install -a
+      run: cd Airoha && ./scripts/feeds install -a
 
     - name: Load custom configuration (DIY_P2_SH)
       run: |
-        [ -e files ] && mv files ImmortalWrt/files
+        [ -e files ] && mv files Airoha/files
         chmod +x $DIY_P2_SH
-        cd ImmortalWrt
+        cd Airoha
         $GITHUB_WORKSPACE/$DIY_P2_SH
+
+    - name: Configure IPTV
+      run: |
+        if [ -e "$CONFIG_FILE" ]; then
+          case "${{ github.event.inputs.IPTV }}" in
+            enable)
+              sed -i '/CONFIG_PACKAGE_luci-app-iptv/d' "$CONFIG_FILE"
+              [ -n "$(tail -c1 "$CONFIG_FILE")" ] && echo >> "$CONFIG_FILE"
+              echo "CONFIG_PACKAGE_luci-app-iptv=y" >> "$CONFIG_FILE"
+              echo "IPTV: enabled"
+              ;;
+            disable)
+              sed -i '/CONFIG_PACKAGE_luci-app-iptv/d' "$CONFIG_FILE"
+              [ -n "$(tail -c1 "$CONFIG_FILE")" ] && echo >> "$CONFIG_FILE"
+              echo "# CONFIG_PACKAGE_luci-app-iptv is not set" >> "$CONFIG_FILE"
+              echo "IPTV: disabled"
+              ;;
+            *)
+              echo "IPTV: keep (skip)"
+              ;;
+          esac
+        else
+          echo "Config file $CONFIG_FILE not found, skip"
+        fi
 
     - name: Download package
       id: package
       run: |
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE ImmortalWrt/.config
-        cd ImmortalWrt
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE Airoha/.config
+        cd Airoha
         make defconfig
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
@@ -146,11 +200,10 @@ jobs:
     - name: Compile the firmware
       id: compile
       run: |
-        cd ImmortalWrt
+        cd Airoha
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
-        echo "DEVICE_NAME=_mt7981" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
     - name: Check space usage
@@ -161,14 +214,14 @@ jobs:
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
-        name: ImmortalWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: ImmortalWrt/bin
+        name: Airoha_bin${{ env.FILE_DATE }}
+        path: Airoha/bin
 
     - name: Organize files
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
-        cd ImmortalWrt/bin/targets/*/*
+        cd Airoha/bin/targets/*/*
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
@@ -177,7 +230,7 @@ jobs:
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
-        name: ImmortalWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        name: Airoha_firmware${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
     - name: Generate release tag
@@ -185,10 +238,38 @@ jobs:
       if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-        touch release.txt
-        echo "## PonWrt nokia_xg-040g-mf Release $(date +"%Y.%m.%d-%H:%M")" >> release.txt
+
+        case "${{ github.event.inputs.IPTV }}" in
+          enable)  IPTV_TEXT="启用" ;;
+          disable) IPTV_TEXT="禁用" ;;
+          *)       IPTV_TEXT="不修改" ;;
+        esac
+        case "${{ github.event.inputs.Cache }}" in
+          true) CACHE_TEXT="启用" ;;
+          *)    CACHE_TEXT="禁用" ;;
+        esac
+
+        cat > release.txt <<EOF
+        ## PonWrt nokia_xg-040g-mf Release $(date +"%Y.%m.%d %H:%M")
+
+        ### 构建信息
+
+        | 项目 | 内容 |
+        | --- | --- |
+        | 源码仓库 | [$REPO_URL]($REPO_URL) |
+        | 源码分支 | \`$REPO_BRANCH\` |
+        | 配置来源 | \`${{ github.event.inputs.Config }}\` |
+        | luci-app-iptv | $IPTV_TEXT |
+        | 编译缓存 | $CACHE_TEXT |
+
+        ### 附件说明
+
+        - \`*.itb\`：编译生成的固件
+        - \`build.config\`：本次构建实际使用的完整配置
+        EOF
+
         echo "status=success" >> $GITHUB_OUTPUT
-        mv ImmortalWrt/.config ImmortalWrt/build.config
+        mv Airoha/.config Airoha/build.config
 
     - name: Upload firmware to release
       uses: softprops/action-gh-release@v3
@@ -199,7 +280,7 @@ jobs:
         body_path: release.txt
         files: |
           ${{ env.FIRMWARE }}/*.itb
-          ImmortalWrt/build.config
+          Airoha/build.config
 
     - name: Remove old Releases and Workflows
       uses: ophub/delete-releases-workflows@main
