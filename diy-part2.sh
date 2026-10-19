@@ -22,5 +22,13 @@ rm -rf temp-smartdns
 rm -rfv feeds/luci/themes/luci-theme-argon
 git clone https://github.com/jerrykuku/luci-theme-argon.git feeds/luci/themes/luci-theme-argon
 
+# Remove luci-app-argon-config if exists
+if [ -d feeds/luci/applications/luci-app-argon-config ]; then
+  echo "Found luci-app-argon-config, removing ..."
+  rm -rfv feeds/luci/applications/luci-app-argon-config
+else
+  echo "luci-app-argon-config not found, skip"
+fi
+
 #https://github.com/immortalwrt/packages/issues/1607
 #sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
