@@ -24,11 +24,11 @@ on:
       Config:
         description: '选择配置文件'
         required: true
-        default: 'an7583-mini.config'
+        default: 'xg-040g-mf-ubi-mini.config'
         type: choice
         options:
-          - 'an7583.config'
-          - 'an7583-mini.config'
+          - 'xg-040g-mf-ubi.config'
+          - 'xg-040g-mf-ubi-mini.config'
           - 'ponwrt/configs/an7581.config'
           - 'ponwrt/configs/an7583.config'
       IPTV:
@@ -250,7 +250,7 @@ jobs:
         esac
 
         cat > release.txt <<EOF
-        ## PonWrt nokia_xg-040g-mf Release $(date +"%Y.%m.%d %H:%M")
+        ## Build Release $(date +"%Y.%m.%d %H:%M")
 
         ### 构建信息
 
@@ -264,8 +264,12 @@ jobs:
 
         ### 附件说明
 
-        - \`*.itb\`：编译生成的固件
+        - \`initramfs-recovery\`：临时启动固件
+        - \`squashfs-sysupgrade\`：日常升级固件
+        - \`*.itb\`：UBI分区固件
+        - \`*.bin\`：stock分区固件
         - \`build.config\`：本次构建实际使用的完整配置
+        - 请使用此处[pbs05/uboot-an758x](https://github.com/pbs05/uboot-an758x)文件
         EOF
 
         echo "status=success" >> $GITHUB_OUTPUT
@@ -280,6 +284,7 @@ jobs:
         body_path: release.txt
         files: |
           ${{ env.FIRMWARE }}/*.itb
+          ${{ env.FIRMWARE }}/*.bin
           Airoha/build.config
 
     - name: Remove old Releases and Workflows
