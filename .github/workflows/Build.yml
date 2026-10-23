@@ -78,6 +78,7 @@ jobs:
 
     - name: Optimize Disk Space
       uses: hugoalh/disk-space-optimizer-ghaction@v0.8
+      timeout-minutes: 15
       with:
         operate_async: "True"
         operate_sudo: "True"
@@ -99,6 +100,7 @@ jobs:
         os_swap: "False"
 
     - name: Initialization environment
+      timeout-minutes: 30
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
