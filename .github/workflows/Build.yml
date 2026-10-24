@@ -249,7 +249,7 @@ jobs:
         - \`*.itb\`：UBI分区固件
         - \`*.bin\`：stock分区固件
         - \`build.config\`：本次构建实际使用的完整配置
-        - 请使用此处[pbs05/uboot-an758x](https://github.com/pbs05/uboot-an758x)文件
+        - 请使用此处[pbs05/uboot-an758x](https://github.com/pbs05/uboot-an758x)bl2+uboot文件
         EOF
 
         echo "status=success" >> $GITHUB_OUTPUT
