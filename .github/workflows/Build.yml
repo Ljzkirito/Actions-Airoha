@@ -76,16 +76,16 @@ jobs:
         echo "硬盘数量: $(ls /dev/sd* 2>/dev/null | grep -v [1-9] | wc -l)" && df -hT
 
     - name: Initialization environment
-      timeout-minutes: 45
+      timeout-minutes: 20
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         set -euo pipefail
-        sudo -E apt-get update -y
-        sudo -E apt-get install -y \
+        sudo apt-get update -y
+        sudo apt-get install -y \
           bzip2 g++ gawk gcc git glibc-source libncurses-dev make
-        sudo -E apt-get -y autoremove --purge
-        sudo -E apt-get -y clean
+        sudo apt-get -y autoremove --purge
+        sudo apt-get -y clean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
         sudo chown "$USER:$(id -g)" /workdir
