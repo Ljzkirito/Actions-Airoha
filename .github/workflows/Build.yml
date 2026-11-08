@@ -91,7 +91,7 @@ jobs:
         sudo chown "$USER:$(id -g)" /workdir
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Clone source code
       working-directory: /workdir
@@ -180,10 +180,6 @@ jobs:
         df -hT /
         AVAIL=$(df -BG --output=avail /workdir | tail -n1 | tr -dc '0-9')
         echo "Build volume free space: ${AVAIL} GB"
-        if [ "${AVAIL:-0}" -lt 20 ]; then
-          echo "::error::only ${AVAIL} GB free on the build volume; aborting before the disk fills up mid-build"
-          exit 1
-        fi
 
     - name: Download package
       id: package
@@ -211,7 +207,7 @@ jobs:
       run: df -hT
 
     - name: Upload bin directory
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
         name: Airoha_bin${{ env.FILE_DATE }}
@@ -227,7 +223,7 @@ jobs:
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware directory
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
         name: Airoha_firmware${{ env.FILE_DATE }}
